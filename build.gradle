@@ -1,0 +1,176 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'war'
+
+group = 'com.rd'
+version = '0.0.1-SNAPSHOT'
+description = "spring-boot-oauth2"
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+war {
+	//http://stackoverflow.com/questions/7027048/get-the-time-of-start-of-a-gradle-build
+ 	SimpleDateFormat sdfDate = new SimpleDateFormat("yyyyMMdd_HHmmsss")
+    Date now = new Date()
+    String strDate = sdfDate.format(now)
+    
+	baseName = 'spring-boot-oaut2'
+	version = "$version" + '_' + strDate;
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+		mavenLocal()
+		jcenter()
+		flatDir name: 'src/main/resources', dirs: 'lib'
+    }
+
+    dependencies {
+        classpath 'mysql:mysql-connector-java:5.1.36'
+    }
+}
+
+repositories {
+    mavenCentral()
+	mavenLocal()
+}
+
+//create configuration to make 
+//load driver : https://discuss.gradle.org/t/is-it-possible-to-execute-sql-scripts-via-gradle-and-get-responses-if-the-execution-was-successful-or-not/6706/6
+//https://discuss.gradle.org/t/is-it-possible-to-execute-sql-scripts-via-gradle-and-get-responses-if-the-execution-was-successful-or-not/6706/3
+configurations {
+    driver
+}
+
+dependencies {
+
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version:'1.2.6.RELEASE'
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-web', version:'1.2.6.RELEASE'
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-data-jpa', version:'1.2.6.RELEASE'
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-security', version:'1.2.6.RELEASE'
+    compile group: 'org.springframework.security.oauth', name: 'spring-security-oauth2', version:'2.0.3.RELEASE'
+    compile group: 'com.h2database', name: 'h2', version:'1.4.188'
+    compile group: 'org.springframework.boot', name: 'spring-boot-starter-actuator', version:'1.2.6.RELEASE'
+    runtime group: 'mysql', name: 'mysql-connector-java', version: '5.1.36'
+    driver group: 'mysql', name: 'mysql-connector-java', version: '5.1.36'
+    driver fileTree(dir: 'src/main/resources/lib', include: '*.jar')
+    testCompile(group: 'org.springframework.boot', name: 'spring-boot-starter-test', version:'1.2.6.RELEASE') {
+		exclude(module: 'commons-logging')
+    }
+}
+
+task list << {
+	
+	File srcDir 
+		
+	FileCollection collection = files { srcDir.listFiles() }
+	srcDir = file('src')
+	println "Contents of $srcDir.name"
+	
+	collection.collect{
+		relativePath(it)
+	}.each {
+		println it
+	}
+}
+
+task tree << {
+	FileTree tree = fileTree(dir : 'src/main')
+	
+	tree.include('**/*.java')
+	tree.each { File file -> println file }
+	
+	println System.getProperty("user.dir")
+}
+
+task copyTask(type: Copy){
+	from 'src/main/resources/sql'
+	into 'build/dbscript'
+	include '**/*.sql'
+}
+
+import org.apache.tools.ant.filters.ReplaceTokens
+
+task filter(type: Copy){
+	
+	//http://yerinle.github.io/blog/2013/02/27/gradle-filter-a-file-using-ant-filters/
+	
+	from 'src/main/resources/sql'
+	into 'build/dbscript'
+	
+	//create property file to replace with token in files
+	def properties = new Properties()
+	file('src/main/resources/application.properties').withInputStream {
+		properties.load(it)
+	}
+	
+    filter(ReplaceTokens, tokens: properties)
+    
+}
+
+import groovy.sql.*
+
+def db = [
+    driver: 'com.mysql.jdbc.Driver',
+    url: 'jdbc:mysql://localhost:3306/test',
+    user: 'root',
+    password: '123456'
+]
+
+URLClassLoader loader = GroovyObject.class.classLoader
+configurations.driver.each {File file ->
+    loader.addURL(file.toURL())
+}
+
+//http://www.schibsted.pl/blog/groovy-sql-an-easy-way-to-database-scripting/
+task sqlserver << {
+	def props = [user: 'sa', password: 'Passw@rd!', allowMultiQueries: 'true'] as Properties
+	def driver = 'com.microsoft.sqlserver.jdbc.SQLServerDriver'
+	def url = 'jdbc:sqlserver://localhost:1433;databaseName=bizmob_portal'
+	def username = 'sa'
+	def password = 'Passw@rd!'
+	
+    def sql = Sql.newInstance(url, username, password,  driver)
+        
+    sql.eachRow('select name from sys.tables') { row ->
+        println row[0]
+    }
+    
+    sql.close()
+}
+
+task mysql << {
+
+    def sql = Sql.newInstance(db.url, db.user, db.password, db.driver)
+        
+    sql.eachRow('show tables') { row ->
+        println row[0]
+    }
+    
+    sql.close()
+}
+
+task oracle << {
+	def driver = "oracle.jdbc.OracleDriver"
+	def url="jdbc:oracle:thin:@218.55.79.249:1521:bizmob"
+	def username="portaldev"
+	def password="portal1234"
+	
+	def sql = Sql.newInstance(url, username, password, driver)
+	 
+	sql.eachRow('select company_name from company') { row ->
+       println row[0]
+    }
+	sql.close()
+}
+
+task readFile << {
+	String sqlString = new File('src/main/resources/application.properties').text
+	println sqlString
+}
+
