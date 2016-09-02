@@ -1,3 +1,5 @@
+Copy from someone and convert to gradle and to understand oauth2
+
 [![Build Status](https://secure.travis-ci.org/rajithd/spring-boot-oauth2.png)](http://travis-ci.org/rajithd/spring-boot-oauth2)
 
 # Build and Run
